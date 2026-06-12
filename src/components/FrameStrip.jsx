@@ -1,8 +1,21 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAppState, useAppDispatch, TYPES } from '../context/AppContext';
 
 // Simple thumbnail canvas renderer
-function FrameThumbnail({ imageData, index, isSelected, isTrimmed, onClick, onDelete, onDragStart, onDragOver, onDrop }) {
+function FrameThumbnail({ 
+  imageData, 
+  index, 
+  isSelected, 
+  isTrimmed, 
+  isDragOver, 
+  onClick, 
+  onDelete, 
+  onDragStart, 
+  onDragOver, 
+  onDragLeave, 
+  onDragEnd, 
+  onDrop 
+}) {
   const canvasRef = useRef(null);
 
   useEffect(() => {
@@ -25,10 +38,27 @@ function FrameThumbnail({ imageData, index, isSelected, isTrimmed, onClick, onDe
       draggable
       onDragStart={(e) => onDragStart(e, index)}
       onDragOver={(e) => onDragOver(e, index)}
+      onDragLeave={(e) => onDragLeave(e, index)}
+      onDragEnd={onDragEnd}
       onDrop={(e) => onDrop(e, index)}
       title={isTrimmed ? 'Excluded from loop (Click to select)' : 'Drag to reorder, click to select'}
-      style={{ userSelect: 'none', opacity: isTrimmed ? 0.3 : 1 }}
+      style={{ userSelect: 'none', opacity: isTrimmed ? 0.3 : 1, position: 'relative' }}
     >
+      {/* Insertion Visual Drop Indicator */}
+      {isDragOver && (
+        <div style={{
+          position: 'absolute',
+          top: 0,
+          left: '-5px',
+          width: '4px',
+          height: '100%',
+          backgroundColor: 'var(--accent)',
+          boxShadow: '0 0 10px var(--accent), 0 0 4px var(--accent)',
+          borderRadius: '2px',
+          zIndex: 99,
+          pointerEvents: 'none' // Ensure indicator doesn't block drag events
+        }} />
+      )}
       <canvas ref={canvasRef} className="frame-thumbnail" />
       <span className="frame-number-badge">{index + 1}</span>
       <button
@@ -54,6 +84,7 @@ function FrameStrip({ trimStart = 1, trimEnd = 9999 }) {
   const selectedIndex = editor.selectedFrameIndex;
   
   const dragStartIdxRef = useRef(null);
+  const [dragOverIdx, setDragOverIdx] = useState(null);
 
   const handleSelect = (idx) => {
     dispatch({
@@ -71,13 +102,23 @@ function FrameStrip({ trimStart = 1, trimEnd = 9999 }) {
 
   const handleDragStart = (e, index) => {
     dragStartIdxRef.current = index;
-    // Set transparent image for drag feedback to avoid browser default ghosting issues if preferred,
-    // but default behavior works nicely.
     e.dataTransfer.effectAllowed = 'move';
   };
 
-  const handleDragOver = (e) => {
-    e.preventDefault(); // Required to allow dropping
+  const handleDragOver = (e, index) => {
+    e.preventDefault(); // Required to allow drop
+    if (dragStartIdxRef.current !== null && dragStartIdxRef.current !== index) {
+      setDragOverIdx(index);
+    }
+  };
+
+  const handleDragLeave = (e, index) => {
+    setDragOverIdx((prev) => (prev === index ? null : prev));
+  };
+
+  const handleDragEnd = () => {
+    dragStartIdxRef.current = null;
+    setDragOverIdx(null);
   };
 
   const handleDrop = (e, index) => {
@@ -90,6 +131,7 @@ function FrameStrip({ trimStart = 1, trimEnd = 9999 }) {
       });
     }
     dragStartIdxRef.current = null;
+    setDragOverIdx(null);
   };
 
   if (!frames || frames.length === 0) {
@@ -117,10 +159,13 @@ function FrameStrip({ trimStart = 1, trimEnd = 9999 }) {
               index={idx}
               isSelected={idx === selectedIndex}
               isTrimmed={isTrimmed}
+              isDragOver={dragOverIdx === idx}
               onClick={() => handleSelect(idx)}
               onDelete={handleDelete}
               onDragStart={handleDragStart}
               onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDragEnd={handleDragEnd}
               onDrop={handleDrop}
             />
           );
