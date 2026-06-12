@@ -412,11 +412,11 @@ function Editor() {
                   value={exportType}
                   onChange={(e) => setExportType(e.target.value)}
                   style={{
-                    width: '135px',
+                    width: '155px',
                     border: 'none',
                     backgroundColor: 'var(--bg-card)',
                     height: '32px',
-                    padding: '0 8px',
+                    padding: '0 28px 0 8px',
                     color: 'var(--text-main)',
                     fontSize: '0.85rem',
                     fontFamily: 'inherit',
