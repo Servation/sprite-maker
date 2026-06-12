@@ -1,4 +1,4 @@
-const DB_NAME = 'SpriteMakerDB';
+const DB_NAME = 'SpriteMakerWorkspaceDB_v2';
 const DB_VERSION = 1;
 const STORE_NAME = 'media';
 const KEY_NAME = 'project_session';
@@ -31,6 +31,12 @@ function openDB() {
  * @returns {Promise<boolean>}
  */
 export async function saveSessionMedia(videoBlob, frames, processedFrames) {
+  console.log('[IndexedDB] saveSessionMedia called with:', {
+    hasVideo: !!videoBlob,
+    videoSize: videoBlob ? videoBlob.size : 0,
+    framesCount: frames.length,
+    processedFramesCount: processedFrames.length
+  });
   try {
     const db = await openDB();
     return new Promise((resolve, reject) => {
@@ -58,11 +64,17 @@ export async function saveSessionMedia(videoBlob, frames, processedFrames) {
       };
       
       const request = store.put(record, KEY_NAME);
-      request.onsuccess = () => resolve(true);
-      request.onerror = (e) => reject(e.target.error);
+      request.onsuccess = () => {
+        console.log('[IndexedDB] saveSessionMedia completed successfully');
+        resolve(true);
+      };
+      request.onerror = (e) => {
+        console.error('[IndexedDB] saveSessionMedia failed request:', e.target.error);
+        reject(e.target.error);
+      };
     });
   } catch (err) {
-    console.error('Failed to save session media to IndexedDB:', err);
+    console.error('[IndexedDB] saveSessionMedia caught exception:', err);
     throw err;
   }
 }
@@ -72,6 +84,7 @@ export async function saveSessionMedia(videoBlob, frames, processedFrames) {
  * @returns {Promise<{video: Blob, frames: ImageData[], processedFrames: ImageData[]}|null>}
  */
 export async function loadSessionMedia() {
+  console.log('[IndexedDB] loadSessionMedia called');
   try {
     const db = await openDB();
     return new Promise((resolve, reject) => {
@@ -82,34 +95,53 @@ export async function loadSessionMedia() {
       request.onsuccess = (e) => {
         const record = e.target.result;
         if (!record) {
+          console.log('[IndexedDB] loadSessionMedia found no session');
           resolve(null);
           return;
         }
         
         try {
-          // Reconstruct ImageData arrays
-          const reconstructedFrames = record.frames.map(f => 
-            new ImageData(new Uint8ClampedArray(f.data), f.width, f.height)
-          );
+          console.log('[IndexedDB] loadSessionMedia found record, reconstructing frames...', {
+            hasVideo: !!record.video,
+            videoSize: record.video ? record.video.size : 0,
+            framesCount: record.frames?.length,
+            processedCount: record.processedFrames?.length
+          });
           
-          const reconstructedProcessedFrames = record.processedFrames.map(f => 
-            new ImageData(new Uint8ClampedArray(f.data), f.width, f.height)
-          );
+          // Reconstruct ImageData arrays defensively to handle standard TypedArray clones or object maps
+          const reconstructedFrames = record.frames.map(f => {
+            const dataArray = f.data instanceof Uint8ClampedArray
+              ? f.data
+              : new Uint8ClampedArray(f.data.buffer || Object.values(f.data));
+            return new ImageData(dataArray, f.width, f.height);
+          });
           
+          const reconstructedProcessedFrames = record.processedFrames.map(f => {
+            const dataArray = f.data instanceof Uint8ClampedArray
+              ? f.data
+              : new Uint8ClampedArray(f.data.buffer || Object.values(f.data));
+            return new ImageData(dataArray, f.width, f.height);
+          });
+          
+          console.log('[IndexedDB] loadSessionMedia reconstruction complete');
           resolve({
             video: record.video,
             frames: reconstructedFrames,
             processedFrames: reconstructedProcessedFrames
           });
         } catch (reconstructErr) {
+          console.error('[IndexedDB] loadSessionMedia reconstruction error:', reconstructErr);
           reject(reconstructErr);
         }
       };
       
-      request.onerror = (e) => reject(e.target.error);
+      request.onerror = (e) => {
+        console.error('[IndexedDB] loadSessionMedia failed request:', e.target.error);
+        reject(e.target.error);
+      };
     });
   } catch (err) {
-    console.error('Failed to load session media from IndexedDB:', err);
+    console.error('[IndexedDB] loadSessionMedia caught exception:', err);
     throw err;
   }
 }
@@ -119,6 +151,7 @@ export async function loadSessionMedia() {
  * @returns {Promise<boolean>}
  */
 export async function clearSessionMedia() {
+  console.log('[IndexedDB] clearSessionMedia called');
   try {
     const db = await openDB();
     return new Promise((resolve, reject) => {
@@ -126,11 +159,17 @@ export async function clearSessionMedia() {
       const store = transaction.objectStore(STORE_NAME);
       const request = store.delete(KEY_NAME);
       
-      request.onsuccess = () => resolve(true);
-      request.onerror = (e) => reject(e.target.error);
+      request.onsuccess = () => {
+        console.log('[IndexedDB] clearSessionMedia completed successfully');
+        resolve(true);
+      };
+      request.onerror = (e) => {
+        console.error('[IndexedDB] clearSessionMedia failed request:', e.target.error);
+        reject(e.target.error);
+      };
     });
   } catch (err) {
-    console.error('Failed to clear IndexedDB:', err);
+    console.error('[IndexedDB] clearSessionMedia caught exception:', err);
     throw err;
   }
 }
