@@ -55,6 +55,12 @@ const defaultEditor = {
   },
   selectedFrameIndex: null, // Selected frame for detailed view
   perspective: 'single', // 'single' | '2way_mirror' | '4way'
+  colorQuantization: {
+    enabled: false,
+    mode: 'custom', // 'custom' | 'nes' | 'gameboy' | 'pico8' | 'genesis'
+    colors: 16,     // 2 to 256
+    dither: false   // Ordered Bayer dithering
+  }
 };
 
 const defaultLocalLlm = {

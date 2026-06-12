@@ -14,6 +14,7 @@ import useFrameExtraction from '../hooks/useFrameExtraction';
 import useBackgroundRemoval from '../hooks/useBackgroundRemoval';
 import { assembleSpriteSheet, canvasToBlob } from '../services/sprite-assembler';
 import { saveSessionMedia, clearSessionMedia } from '../services/db';
+import { quantizeFrames } from '../services/color-quantizer';
 
 function Editor() {
   const { project, editor } = useAppState();
@@ -37,6 +38,12 @@ function Editor() {
   const [chromaEnabled, setChromaEnabled] = useState(editor.chromaKey.enabled);
   const [perspective, setPerspective] = useState(editor.perspective || 'single');
   const [exportType, setExportType] = useState('png'); // 'png' | 'zip' | 'json'
+
+  // Retro Color Quantizer States
+  const [quantizeEnabled, setQuantizeEnabled] = useState(editor.colorQuantization?.enabled || false);
+  const [quantizeMode, setQuantizeMode] = useState(editor.colorQuantization?.mode || 'custom');
+  const [quantizeColors, setQuantizeColors] = useState(editor.colorQuantization?.colors || 16);
+  const [quantizeDither, setQuantizeDither] = useState(editor.colorQuantization?.dither || false);
 
   // Reset Modal states
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
@@ -148,6 +155,38 @@ function Editor() {
     updateEditorConfig({
       frameWidth: width,
       frameHeight: height
+    });
+  };
+
+  // Retro Quantizer event handlers
+  const handleQuantizeToggle = (e) => {
+    const val = e.target.checked;
+    setQuantizeEnabled(val);
+    updateEditorConfig({
+      colorQuantization: { ...editor.colorQuantization, enabled: val }
+    });
+  };
+
+  const handleQuantizeModeChange = (e) => {
+    const val = e.target.value;
+    setQuantizeMode(val);
+    updateEditorConfig({
+      colorQuantization: { ...editor.colorQuantization, mode: val }
+    });
+  };
+
+  const handleColorsChange = (colorsVal) => {
+    setQuantizeColors(colorsVal);
+    updateEditorConfig({
+      colorQuantization: { ...editor.colorQuantization, colors: colorsVal }
+    });
+  };
+
+  const handleDitherToggle = (e) => {
+    const val = e.target.checked;
+    setQuantizeDither(val);
+    updateEditorConfig({
+      colorQuantization: { ...editor.colorQuantization, dither: val }
     });
   };
 
@@ -335,11 +374,14 @@ function Editor() {
   };
 
   const handleExport = async () => {
-    const framesToExport = project.processedFrames.slice(trimStart - 1, trimEnd);
-    if (!framesToExport || framesToExport.length === 0) {
+    const rawFramesToExport = project.processedFrames.slice(trimStart - 1, trimEnd);
+    if (!rawFramesToExport || rawFramesToExport.length === 0) {
       addToast('No frames to export. Please extract frames first.', 'warning');
       return;
     }
+
+    // Apply color quantization filter on export if enabled
+    const framesToExport = quantizeFrames(rawFramesToExport, editor.colorQuantization || { enabled: false });
 
     try {
       if (exportType === 'png') {
@@ -381,7 +423,11 @@ function Editor() {
   const hasVideo = !!project.videoUrl;
   const hasFrames = project.processedFrames.length > 0;
   const isBusy = isExtracting || isRemovingBg;
+  
+  // Slice raw frames first
   const trimmedFrames = allFrames.slice(debouncedTrimStart - 1, debouncedTrimEnd);
+  // Apply retro quantization on the display slice for previews
+  const displayFrames = quantizeFrames(trimmedFrames, editor.colorQuantization || { enabled: false });
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -652,6 +698,82 @@ function Editor() {
               )}
             </div>
 
+            {/* Retro Color Depth (Quantization) */}
+            <div className="card glass">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <h3 style={{ fontSize: '0.95rem', fontWeight: 600 }}>Retro Color Depth</h3>
+                <label className="toggle-switch">
+                  <input
+                    type="checkbox"
+                    className="toggle-switch-input"
+                    checked={quantizeEnabled}
+                    onChange={handleQuantizeToggle}
+                    disabled={isBusy || !hasFrames}
+                  />
+                  <span className="toggle-switch-slider" />
+                  <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Apply Palette</span>
+                </label>
+              </div>
+
+              {quantizeEnabled && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                    {/* Palette Mode */}
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label text-xs">Palette Console Mode</label>
+                      <select
+                        className="input"
+                        value={quantizeMode}
+                        onChange={handleQuantizeModeChange}
+                        disabled={isBusy}
+                        style={{ height: '36px', padding: '4px 8px', fontSize: '0.85rem' }}
+                      >
+                        <option value="custom">Custom Quantized Colors</option>
+                        <option value="8bit">8-Bit Color (3-3-2 format)</option>
+                        <option value="12bit">12-Bit Color (4-4-4 format)</option>
+                        <option value="15bit">15-Bit Color (5-5-5 format)</option>
+                        <option value="16bit">16-Bit Color (5-6-5 format)</option>
+                        <option value="nes">NES Preset (56 Colors)</option>
+                        <option value="gameboy">Game Boy Preset (4 Colors)</option>
+                        <option value="pico8">PICO-8 Preset (16 Colors)</option>
+                        <option value="genesis">Sega Genesis Preset (64 Colors)</option>
+                      </select>
+                    </div>
+
+                    {/* Dithering toggle */}
+                    <div className="form-group" style={{ margin: 0, display: 'flex', alignItems: 'center', height: '100%', paddingTop: '16px' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', userSelect: 'none' }}>
+                        <input
+                          type="checkbox"
+                          checked={quantizeDither}
+                          onChange={handleDitherToggle}
+                          disabled={isBusy}
+                          style={{ width: '16px', height: '16px', accentColor: 'var(--accent)' }}
+                        />
+                        <span className="text-xs" style={{ fontWeight: 500 }}>Ordered Dithering (Bayer)</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Colors slider (only visible in custom mode) */}
+                  {quantizeMode === 'custom' && (
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label text-xs">Max Palette Colors: {quantizeColors}</label>
+                      <input
+                        type="range"
+                        min="2"
+                        max="256"
+                        className="range-input"
+                        value={quantizeColors}
+                        onChange={(e) => handleColorsChange(parseInt(e.target.value, 10))}
+                        disabled={isBusy}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
             {/* Loop Trimming Panel */}
             {hasFrames && (
               <div className="card glass">
@@ -689,10 +811,10 @@ function Editor() {
             )}
 
             {/* Animation Playback Preview */}
-            <AnimationPreview frames={trimmedFrames} />
+            <AnimationPreview frames={displayFrames} />
 
             {/* Composite Sheet View */}
-            <SpritePreview frames={trimmedFrames} />
+            <SpritePreview frames={displayFrames} />
           </div>
 
         </div>
