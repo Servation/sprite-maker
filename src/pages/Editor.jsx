@@ -414,19 +414,20 @@ function Editor() {
                   style={{
                     width: '135px',
                     border: 'none',
-                    background: 'transparent',
+                    backgroundColor: 'var(--bg-card)',
                     height: '32px',
                     padding: '0 8px',
                     color: 'var(--text-main)',
                     fontSize: '0.85rem',
                     fontFamily: 'inherit',
                     outline: 'none',
-                    cursor: 'pointer'
+                    cursor: 'pointer',
+                    borderRadius: '4px'
                   }}
                 >
-                  <option value="png">Sprite Sheet PNG</option>
-                  <option value="zip">Frames ZIP</option>
-                  <option value="json">JSON Metadata</option>
+                  <option value="png" style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-main)' }}>Sprite Sheet PNG</option>
+                  <option value="zip" style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-main)' }}>Frames ZIP</option>
+                  <option value="json" style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-main)' }}>JSON Metadata</option>
                 </select>
                 <button
                   className="btn btn-accent text-sm"
