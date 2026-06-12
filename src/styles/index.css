@@ -107,6 +107,24 @@ h1, h2, h3, h4, h5, h6 {
   z-index: 10;
 }
 
+/* Collapsed Left Sidebar styles */
+.sidebar.collapsed {
+  width: 70px;
+}
+
+.sidebar.collapsed .nav-links {
+  padding: 24px 8px;
+}
+
+.sidebar.collapsed .nav-link {
+  padding: 10px;
+  justify-content: center;
+}
+
+.sidebar.collapsed .nav-link::before {
+  display: none;
+}
+
 .sidebar-header {
   height: 72px;
   padding: 0 24px;

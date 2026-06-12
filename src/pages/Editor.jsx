@@ -447,6 +447,14 @@ function Editor() {
           <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
             <button
               className="btn btn-secondary text-sm"
+              onClick={() => updateEditorConfig({ rightPanelCollapsed: !editor.rightPanelCollapsed })}
+              disabled={isBusy}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+            >
+              {editor.rightPanelCollapsed ? '▶ Show Sidebar' : '◀ Hide Sidebar'}
+            </button>
+            <button
+              className="btn btn-secondary text-sm"
               onClick={handleResetClick}
               disabled={isBusy}
             >
@@ -503,7 +511,7 @@ function Editor() {
           </div>
         </div>
       ) : (
-        <div className="editor-grid">
+        <div className="editor-grid" style={editor.rightPanelCollapsed ? { gridTemplateColumns: '1fr' } : {}}>
           
           {/* Left panel - Video and timeline */}
           <div className="workspace-panel">
@@ -531,7 +539,8 @@ function Editor() {
           </div>
 
           {/* Right panel - Sheet parameters and output */}
-          <div className="workspace-panel">
+          {!editor.rightPanelCollapsed && (
+            <div className="workspace-panel">
             {/* Sheet Configurations */}
             <div className="card glass" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
               {/* Columns */}
@@ -816,6 +825,7 @@ function Editor() {
             {/* Composite Sheet View */}
             <SpritePreview frames={displayFrames} />
           </div>
+          )}
 
         </div>
       )}

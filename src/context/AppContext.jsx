@@ -55,6 +55,8 @@ const defaultEditor = {
   },
   selectedFrameIndex: null, // Selected frame for detailed view
   perspective: 'single', // 'single' | '2way_mirror' | '4way'
+  sidebarCollapsed: false, // Left navigation sidebar collapse state
+  rightPanelCollapsed: false, // Right control panel collapse state
   colorQuantization: {
     enabled: false,
     mode: 'custom', // 'custom' | 'nes' | 'gameboy' | 'pico8' | 'genesis'

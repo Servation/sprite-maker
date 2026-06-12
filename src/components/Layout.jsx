@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { useAppState } from '../context/AppContext';
+import { useAppState, useAppDispatch, TYPES } from '../context/AppContext';
 
 // Inline SVG Icons
 const IconHome = () => (
@@ -43,48 +43,73 @@ const IconSettings = () => (
 );
 
 function Layout({ children }) {
-  const { apiKey } = useAppState();
+  const { apiKey, editor } = useAppState();
+  const dispatch = useAppDispatch();
   const isApiConnected = !!apiKey;
+  const isSidebarCollapsed = editor.sidebarCollapsed;
 
   return (
     <div className="app-container">
       {/* Sidebar */}
-      <aside className="sidebar">
-        <div className="sidebar-header">
+      <aside className={`sidebar ${isSidebarCollapsed ? 'collapsed' : ''}`}>
+        <div className="sidebar-header" style={{ justifyContent: isSidebarCollapsed ? 'center' : 'space-between' }}>
           <div className="brand-icon">S</div>
-          <span className="brand-name">Sprite Maker</span>
+          {!isSidebarCollapsed && <span className="brand-name">Sprite Maker</span>}
+          <button 
+            type="button" 
+            onClick={() => dispatch({ type: TYPES.UPDATE_EDITOR, payload: { sidebarCollapsed: !isSidebarCollapsed } })}
+            className="sidebar-toggle-btn"
+            title={isSidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'var(--text-muted)',
+              cursor: 'pointer',
+              padding: '4px',
+              display: 'flex',
+              alignItems: 'center',
+              fontSize: '1.1rem',
+              marginLeft: isSidebarCollapsed ? '0' : 'auto'
+            }}
+          >
+            {isSidebarCollapsed ? '»' : '«'}
+          </button>
         </div>
         
         <nav className="nav-links">
-          <NavLink to="/" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} end>
+          <NavLink to="/" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} end title={isSidebarCollapsed ? "Dashboard" : undefined}>
             <IconHome />
-            <span>Dashboard</span>
+            {!isSidebarCollapsed && <span>Dashboard</span>}
           </NavLink>
           
-          <NavLink to="/generate" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+          <NavLink to="/generate" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} title={isSidebarCollapsed ? "AI Generate" : undefined}>
             <IconGenerate />
-            <span>AI Generate</span>
+            {!isSidebarCollapsed && <span>AI Generate</span>}
           </NavLink>
           
-          <NavLink to="/import" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+          <NavLink to="/import" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} title={isSidebarCollapsed ? "Import Video" : undefined}>
             <IconImport />
-            <span>Import Video</span>
+            {!isSidebarCollapsed && <span>Import Video</span>}
           </NavLink>
           
-          <NavLink to="/editor" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+          <NavLink to="/editor" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} title={isSidebarCollapsed ? "Sprite Editor" : undefined}>
             <IconEditor />
-            <span>Sprite Editor</span>
+            {!isSidebarCollapsed && <span>Sprite Editor</span>}
           </NavLink>
           
-          <NavLink to="/settings" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+          <NavLink to="/settings" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} title={isSidebarCollapsed ? "Settings" : undefined}>
             <IconSettings />
-            <span>Settings</span>
+            {!isSidebarCollapsed && <span>Settings</span>}
           </NavLink>
         </nav>
         
-        <div className="sidebar-footer">
-          <span>Local Mode</span>
-          <span>v1.0.0</span>
+        <div className="sidebar-footer" style={{ padding: isSidebarCollapsed ? '10px 0' : '16px', alignItems: 'center' }}>
+          {isSidebarCollapsed ? <span title="Local Mode v1.0.0">v1.0</span> : (
+            <>
+              <span>Local Mode</span>
+              <span>v1.0.0</span>
+            </>
+          )}
         </div>
       </aside>
 
