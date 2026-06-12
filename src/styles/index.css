@@ -949,47 +949,93 @@ textarea.input {
 .w-full { width: 100%; }
 
 /* Responsive adjustments */
-@media (max-width: 1024px) {
+@media (max-width: 1024px), (orientation: portrait) {
   .app-container {
     flex-direction: column;
     position: relative;
+    height: 100vh;
+    overflow: hidden;
   }
-  .sidebar {
-    width: 100%;
+  
+  .sidebar, .sidebar.collapsed {
+    width: 100% !important;
     height: auto;
     border-right: none;
     border-bottom: 1px solid var(--border-color);
   }
+  
   .sidebar-header {
-    height: 72px;
+    height: 64px;
     padding: 0 16px;
     border-bottom: 1px solid var(--border-color);
   }
+  
+  .sidebar-toggle-btn {
+    display: none !important;
+  }
+  
+  .sidebar.collapsed .nav-link span,
+  .sidebar.collapsed .brand-name {
+    display: inline !important;
+  }
+  
   .nav-links {
     flex-direction: row;
     overflow-x: auto;
-    padding: 10px;
+    padding: 10px 16px;
+    gap: 16px;
   }
+  
+  .nav-link, .sidebar.collapsed .nav-link {
+    padding: 8px 12px !important;
+    justify-content: flex-start;
+    white-space: nowrap;
+    width: auto;
+    height: auto;
+  }
+  
+  .nav-link::before, .sidebar.collapsed .nav-link::before {
+    display: none !important;
+  }
+  
   .sidebar-footer {
     display: none;
   }
+  
   .header {
-    position: absolute;
-    top: 0;
-    right: 0;
-    height: 72px;
-    width: auto;
-    border-bottom: none;
-    background: transparent;
-    padding: 0 16px;
-    z-index: 100;
+    position: static !important;
+    height: auto;
+    width: 100%;
+    border-bottom: 1px solid var(--border-color);
+    padding: 12px 16px;
+    background-color: var(--bg-sidebar);
     display: flex;
-    align-items: center;
+    justify-content: flex-end;
   }
+  
   .header-title {
     display: none;
   }
+  
+  .content-area {
+    padding: 16px !important;
+    overflow-y: auto;
+  }
+  
   .editor-grid {
+    grid-template-columns: 1fr !important;
+    gap: 20px;
+    overflow-y: visible;
+  }
+  
+  .workspace-panel {
+    overflow-y: visible !important;
+    height: auto !important;
+    gap: 20px;
+  }
+  
+  .grid-2 {
     grid-template-columns: 1fr;
+    gap: 16px;
   }
 }
