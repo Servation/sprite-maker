@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { useAppState, useAppDispatch, TYPES } from '../context/AppContext';
 import { useToast } from '../components/Toast';
 
@@ -8,10 +8,12 @@ import FrameStrip from '../components/FrameStrip';
 import SpritePreview from '../components/SpritePreview';
 import AnimationPreview from '../components/AnimationPreview';
 import ProgressBar from '../components/ProgressBar';
+import Modal from '../components/Modal';
 
 import useFrameExtraction from '../hooks/useFrameExtraction';
 import useBackgroundRemoval from '../hooks/useBackgroundRemoval';
 import { assembleSpriteSheet, canvasToBlob } from '../services/sprite-assembler';
+import { saveSessionMedia, clearSessionMedia } from '../services/db';
 
 function Editor() {
   const { project, editor } = useAppState();
@@ -36,19 +38,53 @@ function Editor() {
   const [perspective, setPerspective] = useState(editor.perspective || 'single');
   const [exportType, setExportType] = useState('png'); // 'png' | 'zip' | 'json'
 
+  // Reset Modal states
+  const [isResetModalOpen, setIsResetModalOpen] = useState(false);
+  const [clearMedia, setClearMedia] = useState(true);
+  const [clearSettings, setClearSettings] = useState(false);
+
   // Trim range states (1-indexed bounds)
   const [trimStart, setTrimStart] = useState(1);
   const [trimEnd, setTrimEnd] = useState(1);
+  const [debouncedTrimStart, setDebouncedTrimStart] = useState(1);
+  const [debouncedTrimEnd, setDebouncedTrimEnd] = useState(1);
   const [prevFramesLength, setPrevFramesLength] = useState(0);
 
   const allFrames = project.processedFrames;
+
+  // Auto-save media to IndexedDB when video or frames are updated
+  useEffect(() => {
+    const saveOrClearMedia = async () => {
+      try {
+        if (project.video || project.frames.length > 0) {
+          await saveSessionMedia(project.video, project.frames, project.processedFrames);
+        } else if (!project.video && project.frames.length === 0) {
+          await clearSessionMedia();
+        }
+      } catch (err) {
+        console.error('IndexedDB session sync failed:', err);
+      }
+    };
+    saveOrClearMedia();
+  }, [project.video, project.frames, project.processedFrames]);
 
   // Sync trim range when frame count changes
   if (allFrames.length !== prevFramesLength) {
     setPrevFramesLength(allFrames.length);
     setTrimStart(1);
     setTrimEnd(allFrames.length || 1);
+    setDebouncedTrimStart(1);
+    setDebouncedTrimEnd(allFrames.length || 1);
   }
+
+  // Debounce trim range updates for heavy preview renderings (e.g. SpritePreview, AnimationPreview)
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedTrimStart(trimStart);
+      setDebouncedTrimEnd(trimEnd);
+    }, 150);
+    return () => clearTimeout(handler);
+  }, [trimStart, trimEnd]);
 
   // Sync state to Context
   const updateEditorConfig = (payload) => {
@@ -319,16 +355,33 @@ function Editor() {
     }
   };
 
-  const handleResetWorkspace = () => {
-    if (window.confirm('Are you sure you want to reset the editor? All extracted frames will be cleared.')) {
-      dispatch({ type: TYPES.RESET_PROJECT });
+  const handleResetClick = () => {
+    setIsResetModalOpen(true);
+  };
+
+  const handleConfirmReset = async () => {
+    setIsResetModalOpen(false);
+    
+    dispatch({
+      type: TYPES.RESET_PROJECT,
+      payload: { clearMedia, clearSettings }
+    });
+
+    if (clearMedia) {
+      try {
+        await clearSessionMedia();
+      } catch (err) {
+        console.error('Failed to clear session IndexedDB on reset:', err);
+      }
     }
+
+    addToast('Workspace reset completed successfully!', 'success');
   };
 
   const hasVideo = !!project.videoUrl;
   const hasFrames = project.processedFrames.length > 0;
   const isBusy = isExtracting || isRemovingBg;
-  const trimmedFrames = allFrames.slice(trimStart - 1, trimEnd);
+  const trimmedFrames = allFrames.slice(debouncedTrimStart - 1, debouncedTrimEnd);
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -348,7 +401,7 @@ function Editor() {
           <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
             <button
               className="btn btn-secondary text-sm"
-              onClick={handleResetWorkspace}
+              onClick={handleResetClick}
               disabled={isBusy}
             >
               Reset Workspace
@@ -356,10 +409,20 @@ function Editor() {
             {hasFrames && (
               <div style={{ display: 'flex', gap: '6px', border: '1px solid var(--border-color)', borderRadius: '6px', padding: '4px', backgroundColor: 'rgba(255,255,255,0.02)' }}>
                 <select
-                  className="input text-xs"
                   value={exportType}
                   onChange={(e) => setExportType(e.target.value)}
-                  style={{ width: '130px', border: 'none', background: 'transparent', height: '32px' }}
+                  style={{
+                    width: '135px',
+                    border: 'none',
+                    background: 'transparent',
+                    height: '32px',
+                    padding: '0 8px',
+                    color: 'var(--text-main)',
+                    fontSize: '0.85rem',
+                    fontFamily: 'inherit',
+                    outline: 'none',
+                    cursor: 'pointer'
+                  }}
                 >
                   <option value="png">Sprite Sheet PNG</option>
                   <option value="zip">Frames ZIP</option>
@@ -633,6 +696,54 @@ function Editor() {
 
         </div>
       )}
+
+      {/* Reset Modal */}
+      <Modal
+        isOpen={isResetModalOpen}
+        onClose={() => setIsResetModalOpen(false)}
+        onConfirm={handleConfirmReset}
+        title="Reset Workspace"
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+          <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-main)' }}>
+            Select which elements you want to clear from this workspace:
+          </p>
+          
+          <label style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', cursor: 'pointer', userSelect: 'none' }}>
+            <input
+              type="checkbox"
+              checked={clearMedia}
+              onChange={(e) => setClearMedia(e.target.checked)}
+              style={{ width: '18px', height: '18px', marginTop: '3px', accentColor: 'var(--accent)' }}
+            />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+              <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>Clear Active Media</span>
+              <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                Deletes the loaded video clip and all extracted or chroma-keyed sprite frames from memory and browser storage.
+              </span>
+            </div>
+          </label>
+
+          <label style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', cursor: 'pointer', userSelect: 'none', borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
+            <input
+              type="checkbox"
+              checked={clearSettings}
+              onChange={(e) => setClearSettings(e.target.checked)}
+              style={{ width: '18px', height: '18px', marginTop: '3px', accentColor: 'var(--accent)' }}
+            />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+              <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>Clear Configurations & Settings</span>
+              <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                Resets all editor layout states, active local LLM models, API addresses, custom ComfyUI workflows, and API keys.
+              </span>
+            </div>
+          </label>
+
+          <div style={{ padding: '12px', borderRadius: '6px', border: '1px solid var(--warning)', backgroundColor: 'rgba(234, 179, 8, 0.03)', fontSize: '0.8rem', color: 'var(--warning)', marginTop: '8px', lineHeight: '1.4' }}>
+            ⚠️ <strong>Warning:</strong> Selected components will be permanently deleted from the browser's database and cannot be recovered.
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

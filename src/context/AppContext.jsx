@@ -1,17 +1,75 @@
-/* eslint-disable react-refresh/only-export-components */
-import { createContext, useContext, useReducer, useEffect } from 'react';
+import React, { createContext, useContext, useReducer, useEffect } from 'react';
 
 // Create contexts
 const AppStateContext = createContext(null);
 const AppDispatchContext = createContext(null);
 
-// LocalStorage helpers
+// LocalStorage key names
 const KEY_API_KEY = 'sprite_maker_gemini_api_key';
-const KEY_LLM_API_KEY = 'sprite_maker_llm_api_key';
+const KEY_EDITOR_CONFIG = 'sprite_maker_editor_config';
+const KEY_LOCAL_LLM_CONFIG = 'sprite_maker_local_llm_config';
+const KEY_RENDERING_CONFIG = 'sprite_maker_rendering_config';
+
+// LocalStorage helpers
 const getStoredApiKey = () => localStorage.getItem(KEY_API_KEY) || '';
 const setStoredApiKey = (key) => localStorage.setItem(KEY_API_KEY, key);
-const getStoredLlmApiKey = () => localStorage.getItem(KEY_LLM_API_KEY) || '';
-const setStoredLlmApiKey = (key) => localStorage.setItem(KEY_LLM_API_KEY, key);
+
+const getStoredEditorConfig = () => {
+  const data = localStorage.getItem(KEY_EDITOR_CONFIG);
+  try {
+    return data ? JSON.parse(data) : null;
+  } catch {
+    return null;
+  }
+};
+
+const getStoredLocalLlmConfig = () => {
+  const data = localStorage.getItem(KEY_LOCAL_LLM_CONFIG);
+  try {
+    return data ? JSON.parse(data) : null;
+  } catch {
+    return null;
+  }
+};
+
+const getStoredRenderingConfig = () => {
+  const data = localStorage.getItem(KEY_RENDERING_CONFIG);
+  try {
+    return data ? JSON.parse(data) : null;
+  } catch {
+    return null;
+  }
+};
+
+// Default Configurations
+const defaultEditor = {
+  fps: 10,               // Default 10 FPS
+  frameWidth: 64,        // Default 64px width
+  frameHeight: 64,       // Default 64px height
+  columns: 4,            // Default 4 columns
+  padding: 0,            // Default 0 padding
+  chromaKey: {
+    color: '#00ff00',    // Default green screen color
+    tolerance: 30,       // Chroma key tolerance (0-100)
+    enabled: false       // Whether background removal is applied
+  },
+  selectedFrameIndex: null, // Selected frame for detailed view
+  perspective: 'single', // 'single' | '2way_mirror' | '4way'
+};
+
+const defaultLocalLlm = {
+  enabled: false,
+  serverUrl: 'http://localhost:1234',
+  model: '',
+  models: [],
+  isEnhancing: false
+};
+
+const defaultRendering = {
+  backend: 'veo', // 'veo' | 'comfyui' | 'automatic1111'
+  localUrl: 'http://localhost:8188',
+  comfyWorkflow: null
+};
 
 // Initial State
 const initialState = {
@@ -29,32 +87,12 @@ const initialState = {
     error: null,
     progress: 0,           // 0-100
   },
-  editor: {
-    fps: 10,               // Default 10 FPS
-    frameWidth: 64,        // Default 64px width
-    frameHeight: 64,       // Default 64px height
-    columns: 4,            // Default 4 columns
-    padding: 0,            // Default 0 padding
-    chromaKey: {
-      color: '#00ff00',    // Default green screen color
-      tolerance: 30,       // Chroma key tolerance (0-100)
-      enabled: false       // Whether background removal is applied
-    },
-    selectedFrameIndex: null, // Selected frame for detailed view
-    perspective: 'single', // 'single' | '2way_mirror' | '4way'
-  },
-  localLlm: {
-    enabled: false,
-    serverUrl: 'http://localhost:1234',
-    apiKey: getStoredLlmApiKey(),
-    model: '',
-    models: [],
-    isEnhancing: false
-  },
-  rendering: {
-    backend: 'veo', // 'veo' | 'comfyui' | 'automatic1111'
-    localUrl: 'http://localhost:8188',
-    comfyWorkflow: null
+  editor: { ...defaultEditor, ...getStoredEditorConfig() },
+  localLlm: { ...defaultLocalLlm, ...getStoredLocalLlmConfig() },
+  rendering: { ...defaultRendering, ...getStoredRenderingConfig() },
+  session: {
+    status: 'idle',        // 'idle' | 'restoring' | 'success' | 'fail'
+    error: null
   }
 };
 
@@ -72,6 +110,9 @@ export const TYPES = {
   DELETE_FRAME: 'DELETE_FRAME',
   REORDER_FRAMES: 'REORDER_FRAMES',
   RESET_PROJECT: 'RESET_PROJECT',
+  RESTORE_SESSION_START: 'RESTORE_SESSION_START',
+  RESTORE_SESSION_SUCCESS: 'RESTORE_SESSION_SUCCESS',
+  RESTORE_SESSION_FAIL: 'RESTORE_SESSION_FAIL',
 };
 
 // Reducer
@@ -85,7 +126,6 @@ function appReducer(state, action) {
       };
       
     case TYPES.SET_VIDEO:
-      // Clean up previous URL to avoid memory leak
       if (state.project.videoUrl) {
         URL.revokeObjectURL(state.project.videoUrl);
       }
@@ -111,7 +151,7 @@ function appReducer(state, action) {
         project: {
           ...state.project,
           frames: action.payload,
-          processedFrames: [...action.payload], // Init processed frames as copy of raw frames
+          processedFrames: [...action.payload],
           spriteSheet: null,
         },
         editor: {
@@ -148,35 +188,32 @@ function appReducer(state, action) {
         }
       };
       
-    case TYPES.UPDATE_EDITOR:
+    case TYPES.UPDATE_EDITOR: {
+      const nextEditor = { ...state.editor, ...action.payload };
+      localStorage.setItem(KEY_EDITOR_CONFIG, JSON.stringify(nextEditor));
       return {
         ...state,
-        editor: {
-          ...state.editor,
-          ...action.payload,
-        }
+        editor: nextEditor
       };
+    }
       
-    case TYPES.UPDATE_LOCAL_LLM:
-      if (action.payload.apiKey !== undefined) {
-        setStoredLlmApiKey(action.payload.apiKey);
-      }
+    case TYPES.UPDATE_LOCAL_LLM: {
+      const nextLlm = { ...state.localLlm, ...action.payload };
+      localStorage.setItem(KEY_LOCAL_LLM_CONFIG, JSON.stringify(nextLlm));
       return {
         ...state,
-        localLlm: {
-          ...state.localLlm,
-          ...action.payload,
-        }
+        localLlm: nextLlm
       };
+    }
       
-    case TYPES.UPDATE_RENDERING:
+    case TYPES.UPDATE_RENDERING: {
+      const nextRendering = { ...state.rendering, ...action.payload };
+      localStorage.setItem(KEY_RENDERING_CONFIG, JSON.stringify(nextRendering));
       return {
         ...state,
-        rendering: {
-          ...state.rendering,
-          ...action.payload,
-        }
+        rendering: nextRendering
       };
+    }
       
     case TYPES.DELETE_FRAME: {
       const idx = action.payload;
@@ -212,15 +249,12 @@ function appReducer(state, action) {
       const frames = [...state.project.frames];
       const processed = [...state.project.processedFrames];
       
-      // Move raw frames
       const [movedFrame] = frames.splice(sourceIdx, 1);
       frames.splice(destIdx, 0, movedFrame);
       
-      // Move processed frames
       const [movedProcessed] = processed.splice(sourceIdx, 1);
       processed.splice(destIdx, 0, movedProcessed);
       
-      // Maintain selection
       let selectedIdx = state.editor.selectedFrameIndex;
       if (selectedIdx === sourceIdx) {
         selectedIdx = destIdx;
@@ -245,28 +279,92 @@ function appReducer(state, action) {
       };
     }
     
-    case TYPES.RESET_PROJECT:
-      if (state.project.videoUrl) {
+    case TYPES.RESET_PROJECT: {
+      const { clearMedia = true, clearSettings = false } = action.payload || {};
+      
+      if (clearMedia && state.project.videoUrl) {
         URL.revokeObjectURL(state.project.videoUrl);
       }
+      
+      let nextEditor = state.editor;
+      let nextLlm = state.localLlm;
+      let nextRendering = state.rendering;
+      let nextApiKey = state.apiKey;
+      
+      if (clearSettings) {
+        localStorage.removeItem(KEY_EDITOR_CONFIG);
+        localStorage.removeItem(KEY_LOCAL_LLM_CONFIG);
+        localStorage.removeItem(KEY_RENDERING_CONFIG);
+        localStorage.removeItem(KEY_API_KEY);
+        nextEditor = { ...defaultEditor };
+        nextLlm = { ...defaultLocalLlm };
+        nextRendering = { ...defaultRendering };
+        nextApiKey = '';
+      }
+      
       return {
         ...state,
-        project: {
+        apiKey: nextApiKey,
+        project: clearMedia ? {
           video: null,
           videoUrl: null,
           frames: [],
           processedFrames: [],
           spriteSheet: null,
-        },
-        generation: {
+        } : state.project,
+        generation: clearMedia ? {
           status: 'idle',
           operationId: null,
           error: null,
           progress: 0,
+        } : state.generation,
+        editor: {
+          ...nextEditor,
+          selectedFrameIndex: clearMedia ? null : nextEditor.selectedFrameIndex,
+        },
+        localLlm: nextLlm,
+        rendering: nextRendering
+      };
+    }
+
+    case TYPES.RESTORE_SESSION_START:
+      return {
+        ...state,
+        session: {
+          status: 'restoring',
+          error: null
+        }
+      };
+
+    case TYPES.RESTORE_SESSION_SUCCESS: {
+      const { video, videoUrl, frames, processedFrames } = action.payload;
+      return {
+        ...state,
+        project: {
+          ...state.project,
+          video,
+          videoUrl,
+          frames,
+          processedFrames,
+          spriteSheet: null
         },
         editor: {
           ...state.editor,
-          selectedFrameIndex: null,
+          selectedFrameIndex: frames.length > 0 ? 0 : null
+        },
+        session: {
+          status: 'success',
+          error: null
+        }
+      };
+    }
+
+    case TYPES.RESTORE_SESSION_FAIL:
+      return {
+        ...state,
+        session: {
+          status: 'fail',
+          error: action.payload
         }
       };
       
@@ -279,14 +377,13 @@ function appReducer(state, action) {
 export function AppProvider({ children }) {
   const [state, dispatch] = useReducer(appReducer, initialState);
   
-  // Cleanup object URL on change or unmount
   useEffect(() => {
     return () => {
       if (state.project.videoUrl) {
         URL.revokeObjectURL(state.project.videoUrl);
       }
     };
-  }, [state.project.videoUrl]);
+  }, []);
   
   return (
     <AppStateContext.Provider value={state}>
